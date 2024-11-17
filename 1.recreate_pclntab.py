@@ -1,9 +1,11 @@
-#Recreate pcln table in for stripped Go samples pre-compiler version 1.16
-#Bruteforce function discovery and recreate .gopclntab segment
-#(Most useful pre IDA 7.6)
+# Recreate pcln table in for stripped Go samples pre-compiler version 1.16
+# Bruteforce function discovery and recreate .gopclntab segment
+# (Most useful pre IDA 7.6)
 import idc
 import idautils
 import idaapi
+import ida_ida
+import ida_bytes
 
 exists = False
 for seg in idautils.Segments():
@@ -14,21 +16,19 @@ for seg in idautils.Segments():
         break
 
 
-info = idaapi.get_inf_structure()
-try:
-    is_be = info.is_be()
-except:
-    is_be = info.mf
+is_be = ida_ida.inf_is_be()
 
 v12magic = "FF FF FF FB 00 00" if is_be else "FB FF FF FF 00 00"
-v116magic = "FF FF FF FA 00 00" if is_be else "FA FF FF FF 00 00" #0xFFFFFFFA #Needs testing
+v116magic = (
+    "FF FF FF FA 00 00" if is_be else "FA FF FF FF 00 00"
+)  # 0xFFFFFFFA #Needs testing
 v118magic = "FF FF FF F0 00 00" if is_be else "F0 FF FF FF 00 00"
 v120magic = "FF FF FF F1 00 00" if is_be else "F1 FF FF FF 00 00"
 
-if info.is_32bit():
+if ida_ida.inf_is_32bit_exactly():
     get_content = ida_bytes.get_dword
     multiplier = 4
-if info.is_64bit():
+if ida_ida.inf_is_64bit():
     get_content = idc.get_qword
     multiplier = 8
 
@@ -37,14 +37,15 @@ empty_counter = 0
 seg_start = 0
 seg_end = 0
 
+
 def find_magic(magic):
-    ea = idc.find_binary(0, idc.SEARCH_DOWN, magic)
+    ea = ida_bytes.find_bytes(magic, 0)
     if ea == idaapi.BADADDR:
         return idaapi.BADADDR
     pc, ptr = idc.get_bytes(ea + 6, 2)
-    if pc not in [1,2,4]:
+    if pc not in [1, 2, 4]:
         return idaapi.BADADDR
-    if ptr not in [4,8]:
+    if ptr not in [4, 8]:
         return idaapi.BADADDR
     print(f"pc:{pc} ptr:{ptr}")
     return ea
@@ -64,7 +65,7 @@ if ea != idaapi.BADADDR:
     seg_start = ea
     print("Segment start (magic header): ", hex(seg_start))
     print("Bruteforcing function discovery based on pcln table")
-    while (not halt):
+    while not halt:
         if empty_counter >= 3:
             seg_end = ea
             print("Effective .gopclntab seg_end: %s" % str(hex(seg_end)))
